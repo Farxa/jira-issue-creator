@@ -1,29 +1,26 @@
-name: 'Create Jira Story'
-description: 'A GitHub Action to create a Jira issue'
+name: "Create Jira Story"
+description: "A GitHub Action to create a Jira issue"
 inputs:
-    jira_base_url:
-        description: 'The base URL of your Jira instance'
-        required: true
-    jira_user_email:
-        description: 'The email address of the Jira user'
-        required: true
-    jira_api_token:
-        description: 'The API token for Jira authentication'
-        required: true
-    jira_project_key:
-        description: 'The Jira project key where the issue will be created'
-        required: true
-    sprint_name:
-        description: 'The name of the sprint to add the issue to'
-        required: true
-    issue_summary:
-        description: 'Summary of the issue'
-        required: true
-    issue_description:
-        description: 'Detailed description of the issue'
-        required: false
-        default: ''
+  jira_base_url:
+    description: "The base URL of your Jira instance"
+    required: true
+  jira_user_email:
+    description: "The email address of the Jira user"
+    required: true
+  jira_api_token:
+    description: "The API token for Jira authentication"
+    required: true
+  jira_project_key:
+    description: "The Jira project key where the issue will be created"
+    required: true
+  issue_summary:
+    description: "Summary of the issue"
+    required: true
+  issue_description:
+    description: "Detailed description of the issue"
+    required: false
+    default: ""
 
 runs:
-    using: 'node20'
-    main: 'index.js'
+  using: "node20"
+  main: "index.js"
