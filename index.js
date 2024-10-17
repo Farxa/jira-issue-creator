@@ -50,47 +50,19 @@ async function sendHttpRequest(method, path, data) {
   });
 }
 
-async function getNeedsRefinementSprint(projectKey) {
-  try {
-    const boards = await sendHttpRequest(
-      "GET",
-      `rest/agile/1.0/board?projectKeyOrId=${projectKey}`
-    );
-    if (boards.values.length === 0)
-      throw new Error(`No board found for project ${projectKey}`);
-
-    const boardId = boards.values[0].id;
-    const sprints = await sendHttpRequest(
-      "GET",
-      `rest/agile/1.0/board/${boardId}/sprint?state=active,future,closed`
-    );
-
-    const needsRefinementSprint = sprints.values.find(
-      (sprint) => sprint.name === "Needs refinement"
-    );
-    if (!needsRefinementSprint)
-      throw new Error("'Needs refinement' sprint not found");
-    return needsRefinementSprint;
-  } catch (error) {
-    throw new Error(
-      `Failed to find 'Needs refinement' sprint: ${error.message}`
-    );
-  }
-}
-
 async function createJiraStory() {
   try {
-    const needsRefinementSprint = await getNeedsRefinementSprint(
-      jiraProjectKey
-    );
-
     const issueData = {
       fields: {
         project: { key: jiraProjectKey },
         summary: issueSummary,
         description: issueDescription,
         issuetype: { name: "Story" },
-        customfield_10020: [{ id: needsRefinementSprint.id }],
+        // Note: We are not using sprints in this issue creation process because we are creating an action for a Kanban board.
+        // Kanban boards operate on a continuous flow of work, allowing for the management of tasks as they progress
+        // through various stages of completion rather than grouping them into time-boxed iterations (sprints).
+        // As a result, there is no concept of assigning issues to sprints; instead, we focus on maintaining
+        // the flow of work and ensuring tasks are prioritized and completed as they move through the Kanban columns.
       },
     };
 
@@ -99,9 +71,7 @@ async function createJiraStory() {
       "rest/api/2/issue",
       issueData
     );
-    console.log(
-      `Created Jira issue: ${response.key} in sprint: ${needsRefinementSprint.name}`
-    );
+    console.log(`Created Jira issue: ${response.key}`);
     core.setOutput("issue_key", response.key);
   } catch (error) {
     console.error("Error creating Jira issue:", error.message);
