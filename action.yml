@@ -17,10 +17,11 @@ inputs:
     description: "Summary of the issue"
     required: true
   issue_description:
-    description: "Detailed description of the issue"
+    description: "Description of the issue or path to a file containing the description"
+    required: true
+  log_file_path:
+    description: "Path to the log file containing the description"
     required: false
-    default: ""
-
 runs:
   using: "node20"
   main: "index.js"

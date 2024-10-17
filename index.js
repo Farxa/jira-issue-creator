@@ -1,5 +1,6 @@
 const core = require("@actions/core");
 const https = require("https");
+const fs = require("fs").promises;
 
 // Retrieve input parameters from the GitHub Action context
 const jiraBaseUrl = core.getInput("jira_base_url");
@@ -52,29 +53,31 @@ async function sendHttpRequest(method, path, data) {
 
 async function createJiraStory() {
   try {
-    // Split the description into lines
-    const descriptionLines = issueDescription.trim().split("\n");
+    let issueDescription = core.getInput("issue_description");
 
-    // Create ADF content
-    const adfContent = descriptionLines.map((line) => ({
-      type: "paragraph",
-      content: [
-        {
-          type: "text",
-          text: line,
-        },
-      ],
-    }));
+    // Check if the input is a file path
+    if (
+      fs
+        .access(issueDescription)
+        .then(() => true)
+        .catch(() => false)
+    ) {
+      try {
+        issueDescription = await fs.readFile(issueDescription, "utf8");
+      } catch (error) {
+        console.error(`Error reading file: ${error.message}`);
+        core.setFailed(`Failed to read file: ${error.message}`);
+        return;
+      }
+    }
+
+    console.log("Raw issue description:", issueDescription);
 
     const issueData = {
       fields: {
         project: { key: jiraProjectKey },
         summary: issueSummary,
-        description: {
-          version: 1,
-          type: "doc",
-          content: adfContent,
-        },
+        description: issueDescription,
         issuetype: { name: "Story" },
         // Note: We are not using sprints in this issue creation process because we are creating an action for a Kanban board.
         // Kanban boards operate on a continuous flow of work, allowing for the management of tasks as they progress
