@@ -29,24 +29,82 @@ async function sendHttpRequest(method, path, data) {
     core.debug(`Sending ${method} request to ${options.path}`);
 
     const req = https.request(options, (res) => {
-      let responseData = "";
-      res.on("data", (chunk) => (responseData += chunk));
+      let responseData = [];
+      res.on("data", (chunk) => responseData.push(chunk));
       res.on("end", () => {
+        const responseBody = Buffer.concat(responseData).toString();
         core.debug(`Response status: ${res.statusCode}`);
-        core.debug(`Response body: ${responseData}`);
+        core.debug(`Raw response: ${responseBody}`);
 
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          try {
-            const parsedData = JSON.parse(responseData);
-            resolve(parsedData);
-          } catch (error) {
-            core.warning(`Failed to parse JSON response: ${error.message}`);
-            core.warning(`Raw response: ${responseData}`);
-            // Resolve with the raw response data instead of rejecting
-            resolve({ rawResponse: responseData });
+          if (responseBody.trim() === "") {
+            // Empty response is considered successful for update operations
+            resolve("");
+          } else {
+            try {
+              const parsedData = JSON.parse(responseBody);
+              resolve(parsedData);
+            } catch (error) {
+              core.warning(`Failed to parse JSON response: ${error.message}`);
+              core.warning(`Raw response: ${responseBody}`);
+              // Resolve with the raw response data instead of rejecting
+              resolve(responseBody);
+            }
           }
         } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${responseData}`));
+          reject(new Error(`HTTP ${res.statusCode}: ${responseBody}`));
+        }
+      });
+    });
+
+    req.on("error", (error) => {
+      core.error(`Request error: ${error.message}`);
+      reject(error);
+    });
+
+    if (data) req.write(JSON.stringify(data));
+    req.end();
+  });
+}
+async function sendHttpRequest(method, path, data) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: new URL(jiraBaseUrl).hostname,
+      path: path.startsWith("/") ? path : `/${path}`,
+      method: method,
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+      },
+    };
+
+    core.debug(`Sending ${method} request to ${options.path}`);
+
+    const req = https.request(options, (res) => {
+      let responseData = [];
+      res.on("data", (chunk) => responseData.push(chunk));
+      res.on("end", () => {
+        const responseBody = Buffer.concat(responseData).toString();
+        core.debug(`Response status: ${res.statusCode}`);
+        core.debug(`Raw response: ${responseBody}`);
+
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          if (responseBody.trim() === "") {
+            // Empty response is considered successful for update operations
+            resolve("");
+          } else {
+            try {
+              const parsedData = JSON.parse(responseBody);
+              resolve(parsedData);
+            } catch (error) {
+              core.warning(`Failed to parse JSON response: ${error.message}`);
+              core.warning(`Raw response: ${responseBody}`);
+              // Resolve with the raw response data instead of rejecting
+              resolve(responseBody);
+            }
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${responseBody}`));
         }
       });
     });
@@ -77,10 +135,30 @@ async function searchJiraIssues(jql) {
 
 async function updateJiraIssue(issueKey, description) {
   try {
-    await sendHttpRequest("PUT", `rest/api/2/issue/${issueKey}`, {
-      fields: { description: description },
-    });
-    console.log(`Updated Jira issue: ${issueKey}`);
+    const response = await sendHttpRequest(
+      "PUT",
+      `rest/api/2/issue/${issueKey}`,
+      {
+        fields: { description: description },
+      }
+    );
+
+    if (
+      response === "" ||
+      (typeof response === "string" && response.trim() === "")
+    ) {
+      console.log(`Updated Jira issue: ${issueKey}`);
+      return true;
+    } else if (typeof response === "object") {
+      console.log(`Updated Jira issue: ${issueKey}`, JSON.stringify(response));
+      return true;
+    } else {
+      console.log(
+        `Updated Jira issue: ${issueKey}. Unexpected response:`,
+        response
+      );
+      return true;
+    }
   } catch (error) {
     console.error("Error updating Jira issue:", error.message);
     throw error;
