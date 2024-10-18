@@ -33,8 +33,18 @@ async function sendHttpRequest(method, path, data) {
       res.on("data", (chunk) => (responseData += chunk));
       res.on("end", () => {
         core.debug(`Response status: ${res.statusCode}`);
+        core.debug(`Response body: ${responseData}`);
+
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          resolve(JSON.parse(responseData));
+          try {
+            const parsedData = JSON.parse(responseData);
+            resolve(parsedData);
+          } catch (error) {
+            core.warning(`Failed to parse JSON response: ${error.message}`);
+            core.warning(`Raw response: ${responseData}`);
+            // Resolve with the raw response data instead of rejecting
+            resolve({ rawResponse: responseData });
+          }
         } else {
           reject(new Error(`HTTP ${res.statusCode}: ${responseData}`));
         }
@@ -131,8 +141,15 @@ async function createOrUpdateJiraStory() {
       "rest/api/2/issue",
       issueData
     );
-    console.log(`Created Jira issue: ${response.key}`);
-    core.setOutput("issue_key", response.key);
+    if (response.rawResponse) {
+      console.log(
+        `Created Jira issue, but couldn't parse response. Raw response: ${response.rawResponse}`
+      );
+      core.setOutput("issue_key", response.key);
+    } else {
+      console.log(`Created Jira issue: ${response.key}`);
+      core.setOutput("issue_key", response.key);
+    }
   } catch (error) {
     console.error("Error creating or updating Jira issue:", error.message);
     core.setFailed(`Failed to create or update Jira issue: ${error.message}`);
