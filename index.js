@@ -169,14 +169,27 @@ function removeTimestamp(description) {
   return description.replace(/\n\nLast updated: .+$/, "");
 }
 
+function formatDateTimeGerman(date) {
+  return date.toLocaleString("de-DE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Europe/Berlin",
+  });
+}
+
 async function createOrUpdateJiraStory() {
   try {
     // Search for existing issues with the same summary
     const jql = `project = ${jiraProjectKey} AND summary ~ "${issueSummary}" AND status != Done`;
     const existingIssues = await searchJiraIssues(jql);
 
-    const timestamp = new Date().toISOString();
-    const updatedDescription = `${issueDescription}\n\nLast updated: ${timestamp}`;
+    const now = new Date();
+    const formattedTimestamp = formatDateTimeGerman(now);
+    const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
 
     if (existingIssues.length > 0) {
       const existingIssue = existingIssues[0];
@@ -219,15 +232,8 @@ async function createOrUpdateJiraStory() {
       "rest/api/2/issue",
       issueData
     );
-    if (response.rawResponse) {
-      console.log(
-        `Created Jira issue, but couldn't parse response. Raw response: ${response.rawResponse}`
-      );
-      core.setOutput("issue_key", response.key);
-    } else {
-      console.log(`Created Jira issue: ${response.key}`);
-      core.setOutput("issue_key", response.key);
-    }
+    console.log(`Created Jira issue: ${response.key}`);
+    core.setOutput("issue_key", response.key);
   } catch (error) {
     console.error("Error creating or updating Jira issue:", error.message);
     core.setFailed(`Failed to create or update Jira issue: ${error.message}`);
