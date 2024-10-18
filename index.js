@@ -56,7 +56,7 @@ async function searchJiraIssues(jql) {
     // (Jira Query Language) query to search for issues with the same summary
     const response = await sendHttpRequest(
       "GET",
-      `rest/api/2/search?jql=${encodeURIComponent(jql)}`
+      `rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=description`
     );
     return response.issues;
   } catch (error) {
@@ -65,20 +65,52 @@ async function searchJiraIssues(jql) {
   }
 }
 
-async function createJiraStory() {
+async function updateJiraIssue(issueKey, description) {
+  try {
+    await sendHttpRequest("PUT", `rest/api/2/issue/${issueKey}`, {
+      fields: { description: description },
+    });
+    console.log(`Updated Jira issue: ${issueKey}`);
+  } catch (error) {
+    console.error("Error updating Jira issue:", error.message);
+    throw error;
+  }
+}
+
+function removeTimestamp(description) {
+  return description.replace(/\n\nLast updated: .+$/, "");
+}
+
+async function createOrUpdateJiraStory() {
   try {
     // Search for existing issues with the same summary
     const jql = `project = ${jiraProjectKey} AND summary ~ "${issueSummary}" AND status != Done`;
     const existingIssues = await searchJiraIssues(jql);
 
-    if (existingIssues.length > 0) {
-      console.log(`Existing issue found: ${existingIssues[0].key}`);
-      core.setOutput("issue_key", existingIssues[0].key);
-      return;
-    }
-
     const timestamp = new Date().toISOString();
     const updatedDescription = `${issueDescription}\n\nLast updated: ${timestamp}`;
+
+    if (existingIssues.length > 0) {
+      const existingIssue = existingIssues[0];
+      const existingDescription = existingIssue.fields.description || "";
+
+      // Compare descriptions without timestamps
+      if (
+        removeTimestamp(existingDescription) !==
+        removeTimestamp(issueDescription)
+      ) {
+        await updateJiraIssue(existingIssue.key, updatedDescription);
+        console.log(
+          `Existing issue updated with new information: ${existingIssue.key}`
+        );
+      } else {
+        console.log(
+          `No changes detected for existing issue: ${existingIssue.key}`
+        );
+      }
+      core.setOutput("issue_key", existingIssue.key);
+      return;
+    }
 
     const issueData = {
       fields: {
@@ -102,11 +134,11 @@ async function createJiraStory() {
     console.log(`Created Jira issue: ${response.key}`);
     core.setOutput("issue_key", response.key);
   } catch (error) {
-    console.error("Error creating Jira issue:", error.message);
-    core.setFailed(`Failed to create Jira issue: ${error.message}`);
+    console.error("Error creating or updating Jira issue:", error.message);
+    core.setFailed(`Failed to create or update Jira issue: ${error.message}`);
   }
 }
 
-createJiraStory().catch((error) => {
+createOrUpdateJiraStory().catch((error) => {
   core.setFailed(`Unhandled error: ${error.message}`);
 });
