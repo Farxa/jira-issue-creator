@@ -51,13 +51,40 @@ async function sendHttpRequest(method, path, data) {
   });
 }
 
+async function searchJiraIssues(jql) {
+  try {
+    // (Jira Query Language) query to search for issues with the same summary
+    const response = await sendHttpRequest(
+      "GET",
+      `rest/api/2/search?jql=${encodeURIComponent(jql)}`
+    );
+    return response.issues;
+  } catch (error) {
+    console.error("Error searching Jira issues:", error.message);
+    throw error;
+  }
+}
+
 async function createJiraStory() {
   try {
+    // Search for existing issues with the same summary
+    const jql = `project = ${jiraProjectKey} AND summary ~ "${issueSummary}" AND status != Done`;
+    const existingIssues = await searchJiraIssues(jql);
+
+    if (existingIssues.length > 0) {
+      console.log(`Existing issue found: ${existingIssues[0].key}`);
+      core.setOutput("issue_key", existingIssues[0].key);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const updatedDescription = `${issueDescription}\n\nLast updated: ${timestamp}`;
+
     const issueData = {
       fields: {
         project: { key: jiraProjectKey },
         summary: issueSummary,
-        description: issueDescription,
+        description: updatedDescription,
         issuetype: { name: "Story" },
         // Note: We are not using sprints in this issue creation process because we are creating an action for a Kanban board.
         // Kanban boards operate on a continuous flow of work, allowing for the management of tasks as they progress
