@@ -53,26 +53,6 @@ async function sendHttpRequest(method, path, data) {
 
 async function createJiraStory() {
   try {
-    let issueDescription = core.getInput("issue_description");
-
-    // Check if the input is a file path
-    if (
-      fs
-        .access(issueDescription)
-        .then(() => true)
-        .catch(() => false)
-    ) {
-      try {
-        issueDescription = await fs.readFile(issueDescription, "utf8");
-      } catch (error) {
-        console.error(`Error reading file: ${error.message}`);
-        core.setFailed(`Failed to read file: ${error.message}`);
-        return;
-      }
-    }
-
-    console.log("Raw issue description:", issueDescription);
-
     const issueData = {
       fields: {
         project: { key: jiraProjectKey },
@@ -86,8 +66,6 @@ async function createJiraStory() {
         // the flow of work and ensuring tasks are prioritized and completed as they move through the Kanban columns.
       },
     };
-
-    console.log("Issue data being sent:", JSON.stringify(issueData, null, 2));
 
     const response = await sendHttpRequest(
       "POST",
