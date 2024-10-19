@@ -66,58 +66,6 @@ async function sendHttpRequest(method, path, data) {
     req.end();
   });
 }
-async function sendHttpRequest(method, path, data) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: new URL(jiraBaseUrl).hostname,
-      path: path.startsWith("/") ? path : `/${path}`,
-      method: method,
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/json",
-      },
-    };
-
-    core.debug(`Sending ${method} request to ${options.path}`);
-
-    const req = https.request(options, (res) => {
-      let responseData = [];
-      res.on("data", (chunk) => responseData.push(chunk));
-      res.on("end", () => {
-        const responseBody = Buffer.concat(responseData).toString();
-        core.debug(`Response status: ${res.statusCode}`);
-        core.debug(`Raw response: ${responseBody}`);
-
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          if (responseBody.trim() === "") {
-            // Empty response is considered successful for update operations
-            resolve("");
-          } else {
-            try {
-              const parsedData = JSON.parse(responseBody);
-              resolve(parsedData);
-            } catch (error) {
-              core.warning(`Failed to parse JSON response: ${error.message}`);
-              core.warning(`Raw response: ${responseBody}`);
-              // Resolve with the raw response data instead of rejecting
-              resolve(responseBody);
-            }
-          }
-        } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${responseBody}`));
-        }
-      });
-    });
-
-    req.on("error", (error) => {
-      core.error(`Request error: ${error.message}`);
-      reject(error);
-    });
-
-    if (data) req.write(JSON.stringify(data));
-    req.end();
-  });
-}
 
 async function searchJiraIssues(jql) {
   try {
