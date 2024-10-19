@@ -129,6 +129,24 @@ function formatDateTimeGerman(date) {
   });
 }
 
+async function getSprintId(sprintName) {
+  try {
+    const response = await sendHttpRequest(
+      "GET",
+      `rest/agile/1.0/board/97/sprint?state=future`
+    );
+    const sprint = response.values.find((s) => s.name === sprintName);
+    if (sprint) {
+      return sprint.id;
+    } else {
+      throw new Error(`Sprint "${sprintName}" not found`);
+    }
+  } catch (error) {
+    console.error("Error getting sprint ID:", error.message);
+    throw error;
+  }
+}
+
 async function createOrUpdateJiraStory() {
   try {
     // Search for existing issues with the same summary
@@ -138,6 +156,9 @@ async function createOrUpdateJiraStory() {
     const now = new Date();
     const formattedTimestamp = formatDateTimeGerman(now);
     const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
+
+    // Get the ID of the "Backlog - Ready for planning" sprint
+    const sprintId = await getSprintId("Backlog - Ready for planning");
 
     if (existingIssues.length > 0) {
       const existingIssue = existingIssues[0];
@@ -149,8 +170,14 @@ async function createOrUpdateJiraStory() {
         removeTimestamp(issueDescription)
       ) {
         await updateJiraIssue(existingIssue.key, updatedDescription);
+        // Add the issue to the sprint
+        await sendHttpRequest(
+          "POST",
+          `rest/agile/1.0/sprint/${sprintId}/issue`,
+          { issues: [existingIssue.key] }
+        );
         console.log(
-          `Existing issue updated with new information: ${existingIssue.key}`
+          `Existing issue updated and added to sprint: ${sprintName}`
         );
       } else {
         console.log(
@@ -167,11 +194,7 @@ async function createOrUpdateJiraStory() {
         summary: issueSummary,
         description: updatedDescription,
         issuetype: { name: "Story" },
-        // Note: We are not using sprints in this issue creation process because we are creating an action for a Kanban board.
-        // Kanban boards operate on a continuous flow of work, allowing for the management of tasks as they progress
-        // through various stages of completion rather than grouping them into time-boxed iterations (sprints).
-        // As a result, there is no concept of assigning issues to sprints; instead, we focus on maintaining
-        // the flow of work and ensuring tasks are prioritized and completed as they move through the Kanban columns.
+        sprint: sprintId,
       },
     };
 
@@ -180,7 +203,9 @@ async function createOrUpdateJiraStory() {
       "rest/api/2/issue",
       issueData
     );
-    console.log(`Created Jira issue: ${response.key}`);
+    console.log(
+      `Created Jira issue: ${response.key} and added to sprint ${sprintName}`
+    );
     core.setOutput("issue_key", response.key);
   } catch (error) {
     console.error("Error creating or updating Jira issue:", error.message);
