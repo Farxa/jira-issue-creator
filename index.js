@@ -157,8 +157,14 @@ async function createOrUpdateJiraStory() {
     const formattedTimestamp = formatDateTimeGerman(now);
     const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
 
+    const sprintName = "Backlog - Ready for planning";
+
     // Get the ID of the "Backlog - Ready for planning" sprint
-    const sprintId = await getSprintId("Backlog - Ready for planning");
+    const sprintId = await getSprintId(sprintName);
+
+    if (!sprintId) {
+      throw new Error(`Sprint "${sprintName}" not found`);
+    }
 
     if (existingIssues.length > 0) {
       const existingIssue = existingIssues[0];
@@ -170,6 +176,8 @@ async function createOrUpdateJiraStory() {
         removeTimestamp(issueDescription)
       ) {
         await updateJiraIssue(existingIssue.key, updatedDescription);
+        console.log(`Existing issue updated: ${existingIssue.key}`);
+
         // Add the issue to the sprint
         await sendHttpRequest(
           "POST",
@@ -177,7 +185,7 @@ async function createOrUpdateJiraStory() {
           { issues: [existingIssue.key] }
         );
         console.log(
-          `Existing issue updated and added to sprint: ${sprintName}`
+          `Issue ${existingIssue.key} added to sprint: ${sprintName}`
         );
       } else {
         console.log(
@@ -203,13 +211,19 @@ async function createOrUpdateJiraStory() {
       "rest/api/2/issue",
       issueData
     );
-    console.log(
-      `Created Jira issue: ${response.key} and added to sprint ${sprintName}`
-    );
+    console.log(`Created Jira issue: ${response.key}`);
+
+    // Ensure the issue is added to the sprint
+    await sendHttpRequest("POST", `rest/agile/1.0/sprint/${sprintId}/issue`, {
+      issues: [response.key],
+    });
+    console.log(`Issue added to sprint: ${sprintName}`);
+
     core.setOutput("issue_key", response.key);
   } catch (error) {
     console.error("Error creating or updating Jira issue:", error.message);
     core.setFailed(`Failed to create or update Jira issue: ${error.message}`);
+    throw error; // This will stop the entire process
   }
 }
 
