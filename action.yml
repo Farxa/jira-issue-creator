@@ -1,5 +1,5 @@
 name: "Create Jira Story"
-description: "A GitHub Action to create a Jira issue"
+description: "A GitHub Action to create or update a Jira issue"
 inputs:
   jira_base_url:
     description: "The base URL of your Jira instance"
@@ -17,11 +17,14 @@ inputs:
     description: "Summary of the issue"
     required: true
   issue_description:
-    description: "Description of the issue or path to a file containing the description"
+    description: "Description of the issue"
     required: true
-  log_file_path:
-    description: "Path to the log file containing the description"
-    required: false
+  board_id:
+    description: "The ID of the Jira board"
+    required: true
+  sprint_name:
+    description: "The name of the sprint to add the issue to"
+    required: true
 runs:
   using: "node20"
   main: "index.js"
