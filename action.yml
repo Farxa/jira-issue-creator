@@ -25,6 +25,9 @@ inputs:
   sprint_name:
     description: "The name of the sprint to add the issue to"
     required: true
+  retry_count:
+    description: "The number of times to retry the request"
+    required: false
 runs:
   using: "node20"
   main: "index.js"

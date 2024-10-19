@@ -31,12 +31,13 @@ const issueSummary = core.getInput("issue_summary");
 const issueDescription = core.getInput("issue_description");
 const boardId = core.getInput("board_id");
 const sprintName = core.getInput("sprint_name");
+const retries = parseInt(core.getInput("retry_count")) || 3;
 
 // Create a base64-encoded string for basic authentication
 const auth = Buffer.from(`${jiraUserEmail}:${jiraApiToken}`).toString("base64");
 
 // HTTP request function with retry logic and rate limiting
-async function sendHttpRequest(method, path, data, retries = 3, delay = 1000) {
+async function sendHttpRequest(method, path, data, retries, delay = 1000) {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: new URL(jiraBaseUrl).hostname,
@@ -109,7 +110,9 @@ async function searchJiraIssues(jql) {
     // (Jira Query Language) query to search for issues with the same summary
     const response = await sendHttpRequest(
       "GET",
-      `rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=description`
+      `rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=description`,
+      null,
+      retries
     );
     return response.issues;
   } catch (error) {
@@ -120,9 +123,14 @@ async function searchJiraIssues(jql) {
 
 async function updateJiraIssue(issueKey, description) {
   try {
-    await sendHttpRequest("PUT", `rest/api/2/issue/${issueKey}`, {
-      fields: { description: description },
-    });
+    await sendHttpRequest(
+      "PUT",
+      `rest/api/2/issue/${issueKey}`,
+      {
+        fields: { description: description },
+      },
+      retries
+    );
     core.info(`Updated Jira issue: ${issueKey}`);
     return true;
   } catch (error) {
