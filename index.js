@@ -1,6 +1,6 @@
 const core = require("@actions/core");
 const https = require("https");
-const fs = require("fs").promises;
+const { Buffer } = require("buffer");
 
 // Input validation
 function validateInputs() {
@@ -120,13 +120,9 @@ async function searchJiraIssues(jql) {
 
 async function updateJiraIssue(issueKey, description) {
   try {
-    const response = await sendHttpRequest(
-      "PUT",
-      `rest/api/2/issue/${issueKey}`,
-      {
-        fields: { description: description },
-      }
-    );
+    await sendHttpRequest("PUT", `rest/api/2/issue/${issueKey}`, {
+      fields: { description: description },
+    });
     core.info(`Updated Jira issue: ${issueKey}`);
     return true;
   } catch (error) {
@@ -169,6 +165,32 @@ async function getSprintId(sprintName) {
   }
 }
 
+async function getIssueSprintStatus(issueKey) {
+  try {
+    const response = await sendHttpRequest(
+      "GET",
+      `rest/agile/1.0/issue/${issueKey}?fields=sprint`
+    );
+    if (response.fields && response.fields.sprint) {
+      return response.fields.sprint.state;
+    }
+    return null;
+  } catch (error) {
+    core.error(
+      `Error getting sprint status for issue ${issueKey}:`,
+      error.message
+    );
+    throw error;
+  }
+}
+
+function getNewDescription(existingDescription, newDescription) {
+  const existingLines = existingDescription.split("\n");
+  const newLines = newDescription.split("\n");
+  const newContent = newLines.filter((line) => !existingLines.includes(line));
+  return newContent.join("\n");
+}
+
 async function createOrUpdateJiraStory() {
   try {
     validateInputs();
@@ -178,9 +200,8 @@ async function createOrUpdateJiraStory() {
 
     const now = new Date();
     const formattedTimestamp = formatDateTimeGerman(now);
-    const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
 
-    // Get the ID of the "Backlog - Ready for planning" sprint
+    // Get the ID of the sprint
     const sprintId = await getSprintId(sprintName);
 
     if (!sprintId) {
@@ -190,27 +211,53 @@ async function createOrUpdateJiraStory() {
     if (existingIssues.length > 0) {
       const existingIssue = existingIssues[0];
       const existingDescription = existingIssue.fields.description || "";
+      const sprintStatus = await getIssueSprintStatus(existingIssue.key);
 
-      // Compare descriptions without timestamps
-      if (
-        removeTimestamp(existingDescription) !==
-        removeTimestamp(issueDescription)
-      ) {
-        await updateJiraIssue(existingIssue.key, updatedDescription);
-        await addIssueToSprint(existingIssue.key, sprintId);
-      } else {
-        core.info(
-          `No changes detected for existing issue: ${existingIssue.key}`
+      if (sprintStatus === "active") {
+        // Create a new issue with only the new content
+        const newContent = getNewDescription(
+          existingDescription,
+          issueDescription
         );
+        if (newContent.trim() !== "") {
+          const newDescription = `${newContent}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
+          const newIssue = await createNewJiraIssue(newDescription, sprintId);
+          await addIssueToSprint(newIssue.key, sprintId);
+          core.setOutput("issue_key", newIssue.key);
+          core.info(
+            `Created new issue ${newIssue.key} as existing issue ${existingIssue.key} is in an active sprint`
+          );
+        } else {
+          core.info(
+            `No new content to add. Existing issue ${existingIssue.key} remains unchanged.`
+          );
+          core.setOutput("issue_key", existingIssue.key);
+        }
+      } else {
+        // Update existing issue
+        const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
+        if (
+          removeTimestamp(existingDescription) !==
+          removeTimestamp(issueDescription)
+        ) {
+          await updateJiraIssue(existingIssue.key, updatedDescription);
+          await addIssueToSprint(existingIssue.key, sprintId);
+          core.info(`Updated existing issue: ${existingIssue.key}`);
+        } else {
+          core.info(
+            `No changes detected for existing issue: ${existingIssue.key}`
+          );
+        }
+        core.setOutput("issue_key", existingIssue.key);
       }
-      core.setOutput("issue_key", existingIssue.key);
-      return;
+    } else {
+      // Create new issue
+      const newDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
+      const newIssue = await createNewJiraIssue(newDescription, sprintId);
+      await addIssueToSprint(newIssue.key, sprintId);
+      core.setOutput("issue_key", newIssue.key);
+      core.info(`Created new Jira issue: ${newIssue.key}`);
     }
-
-    const newIssue = await createNewJiraIssue(updatedDescription, sprintId);
-    await addIssueToSprint(newIssue.key, sprintId);
-
-    core.setOutput("issue_key", newIssue.key);
   } catch (error) {
     core.setFailed(`Failed to create or update Jira issue: ${error.message}`);
     throw error;
