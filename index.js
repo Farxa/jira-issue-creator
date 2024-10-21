@@ -241,7 +241,6 @@ async function createOrUpdateJiraStory() {
         if (newContent.trim() !== "") {
           const newDescription = `${newContent}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
           const newIssue = await createNewJiraIssue(newDescription, sprintId);
-          await addIssueToSprint(newIssue.key, sprintId);
           core.setOutput("issue_key", newIssue.key);
           core.info(
             `Created new issue ${newIssue.key} as existing issue ${existingIssue.key} is in an active sprint`
@@ -252,7 +251,7 @@ async function createOrUpdateJiraStory() {
           );
           core.setOutput("issue_key", existingIssue.key);
         }
-      } else if (sprintStatus === "future" || sprintStatus === null) {
+      } else {
         // Update existing issue
         const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
         if (
@@ -268,14 +267,11 @@ async function createOrUpdateJiraStory() {
           );
         }
         core.setOutput("issue_key", existingIssue.key);
-      } else {
-        core.warning(`Unexpected sprint status: ${sprintStatus}`);
       }
     } else {
       // Create new issue
       const newDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
       const newIssue = await createNewJiraIssue(newDescription, sprintId);
-      await addIssueToSprint(newIssue.key, sprintId);
       core.setOutput("issue_key", newIssue.key);
       core.info(`Created new Jira issue: ${newIssue.key}`);
     }
