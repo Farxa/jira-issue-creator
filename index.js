@@ -295,16 +295,35 @@ async function createNewJiraIssue(description, sprintId) {
     },
   };
 
-  const response = await sendHttpRequest("POST", "rest/api/2/issue", issueData);
-  core.info(`Created Jira issue: ${response.key}`);
-  return response;
+  try {
+    // Create the issue without setting the sprint
+    const response = await sendHttpRequest(
+      "POST",
+      "rest/api/2/issue",
+      issueData
+    );
+    core.info(`Created Jira issue: ${response.key}`);
+
+    // Add the issue to the sprint
+    await addIssueToSprint(response.key, sprintId);
+
+    return response;
+  } catch (error) {
+    core.error(`Error creating new Jira issue: ${error.message}`);
+    throw error;
+  }
 }
 
 async function addIssueToSprint(issueKey, sprintId) {
-  await sendHttpRequest("POST", `rest/agile/1.0/sprint/${sprintId}/issue`, {
-    issues: [issueKey],
-  });
-  core.info(`Issue ${issueKey} added to sprint: ${sprintName}`);
+  try {
+    await sendHttpRequest("POST", `rest/agile/1.0/sprint/${sprintId}/issue`, {
+      issues: [issueKey],
+    });
+    core.info(`Issue ${issueKey} added to sprint: ${sprintName}`);
+  } catch (error) {
+    core.error(`Error adding issue to sprint: ${error.message}`);
+    throw error;
+  }
 }
 
 createOrUpdateJiraStory().catch((error) => {
