@@ -292,7 +292,6 @@ async function createNewJiraIssue(description, sprintId) {
       summary: issueSummary,
       description: description,
       issuetype: { name: "Story" },
-      sprint: sprintId,
     },
   };
 
