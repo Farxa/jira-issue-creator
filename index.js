@@ -175,14 +175,25 @@ async function getSprintId(sprintName) {
 
 async function getIssueSprintStatus(issueKey) {
   try {
-    const response = await sendHttpRequest(
+    // First, get all sprints for the board
+    const sprintsResponse = await sendHttpRequest(
       "GET",
-      `rest/agile/1.0/issue/${issueKey}?fields=sprint`
+      `rest/agile/1.0/board/${boardId}/sprint?state=active,future`
     );
-    if (response.fields && response.fields.sprint) {
-      return response.fields.sprint.state;
+
+    // Then, for each sprint, check if the issue is in it
+    for (const sprint of sprintsResponse.values) {
+      const issuesInSprintResponse = await sendHttpRequest(
+        "GET",
+        `rest/agile/1.0/sprint/${sprint.id}/issue?jql=key=${issueKey}`
+      );
+
+      if (issuesInSprintResponse.issues.length > 0) {
+        return sprint.state; // Return the state of the sprint containing the issue
+      }
     }
-    return null;
+
+    return null; // Issue not found in any sprint
   } catch (error) {
     core.error(
       `Error getting sprint status for issue ${issueKey}:`,
@@ -241,7 +252,7 @@ async function createOrUpdateJiraStory() {
           );
           core.setOutput("issue_key", existingIssue.key);
         }
-      } else {
+      } else if (sprintStatus === "future" || sprintStatus === null) {
         // Update existing issue
         const updatedDescription = `${issueDescription}\n\nZuletzt aktualisiert: ${formattedTimestamp}`;
         if (
@@ -257,6 +268,8 @@ async function createOrUpdateJiraStory() {
           );
         }
         core.setOutput("issue_key", existingIssue.key);
+      } else {
+        core.warning(`Unexpected sprint status: ${sprintStatus}`);
       }
     } else {
       // Create new issue
